@@ -121,6 +121,7 @@ module.exports = class Watcher {
 
             // Insert to database
             this.modelAndInsertCandlesticks(builtCandlesticks)
+            logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
 
             this.isAllowedToResolveMemory = true
         } catch (err) {

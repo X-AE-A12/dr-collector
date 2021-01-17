@@ -54,7 +54,7 @@ module.exports = class Master {
                 toBlock: await providerController.getLatestBlockNumber()  // must be a number so "latest" doesn't work
             })
             if (!transactionHistory) throw new Error("TransactionHistory has thrown an unknown error")
-            logger.debug(`Processing ${transactionHistory.length} transactions for ${this.pool.poolContract}`)
+            logger.info(`Processing ${transactionHistory.length} transactions for ${this.pool.poolContract}`)
 
             if (!transactionHistory.length) {
                 logger.info("There seems to be no transactionHistory for this pool, retrying in 10 minutes.")
