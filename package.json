@@ -17,7 +17,7 @@
   "author": "X-AE-A12",
   "license": "MIT",
   "scripts": {
-    "start": "pm2-runtime start ecosystem.config.js --env production",
+    "start": "pm2-runtime start ecosystem.config.json --env production",
     "dev": "cross-env NODE_ENV=development nodemon src/index.js",
     "test": "jest -i",
     "test:watch": "jest -i --watchAll",
