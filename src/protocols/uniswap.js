@@ -43,12 +43,18 @@ module.exports = class Uniswap extends Master {
                     pairAmount = amount1In * Number(`1e-${pairDecimals}`)
                 }
 
-                simplifiedTransactions.push(this._formatSimplifiedTransaction({
+                const simplifiedTransaction = this._formatSimplifiedTransaction({
                     transaction: transaction,
                     tokenAmount: tokenAmount,
                     pairAmount: pairAmount,
                     inversePrice: inversePrice
-                }))
+                })
+                if (simplifiedTransaction.DIV_BY_ZERO) {
+                    logger.info("Rare occasion with 0 swap rates for transaction:")
+                    logger.info(transaction)
+                    continue
+                }
+                simplifiedTransactions.push(simplifiedTransaction)
             }
             return simplifiedTransactions
         } catch (err) {

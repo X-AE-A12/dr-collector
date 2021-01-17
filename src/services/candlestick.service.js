@@ -1,6 +1,6 @@
 const CandlestickModel = require('../models/candlestick.model')
 const logger = require("../config/logger")
-const { insertCandles } = require("../config/config")
+const { allowCandlestickInsertion } = require("../config/config")
 
 // Returns the last *closed* candle
 const getLastSavedCandlestick = async ({
@@ -23,10 +23,10 @@ const getLastSavedCandlestick = async ({
     } catch (err) {
         throw err
     }
-};
+}; // End of getLastSavedCandlestick
 
 // Returns the last *closed* candle its blockNumber
-const getLastSavedCandlestickBlocknumber = async ({
+const getLastSavedCandlestickBlockNumber = async ({
     poolContract = null,
     interval = null
 } = {}) => {
@@ -43,12 +43,12 @@ const getLastSavedCandlestickBlocknumber = async ({
     } catch (err) {
         throw err
     }
-};
+}; // End of getLastSavedCandlestickBlockNumber
 
 // Insert an array of candlesticks to database. Array can be empty.
 function insertCandlesticks(candlesticks) {
     try {
-        if (!insertCandles) return logger.debug("Insertion of candles disabled")
+        if (!allowCandlestickInsertion) return logger.debug("Insertion of candles disabled")
         return CandlestickModel.insertMany(candlesticks, (err, result) => {
             if (err) throw err
             return result
@@ -56,10 +56,10 @@ function insertCandlesticks(candlesticks) {
     } catch (err) {
         logger.error(err)
     }
-} // End of insert_candles
+}; // End of insertCandlesticks
 
 module.exports = {
     getLastSavedCandlestick,
-    getLastSavedCandlestickBlocknumber,
+    getLastSavedCandlestickBlockNumber,
     insertCandlesticks
-}
+};

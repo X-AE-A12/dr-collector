@@ -1,9 +1,10 @@
 const ethers = require("ethers")
 
 const logger = require('../config/logger');
-const { candlestickController, providerController } = require('../controllers')
+const { candlestickController, transactionController, providerController } = require('../controllers')
 const { pollingEnabled, supportedIntervals } = require('../config/config');
 const { containsNull } = require('../utils')
+const TransactionTransporter = require("../transporters/transaction.transporter")
 const Watcher = require("../watcher")
 
 module.exports = class Master {
@@ -11,89 +12,135 @@ module.exports = class Master {
         this.pool = pool
         this.watchers = []
         this.contractListener = undefined
+        this.isDoneSyncing = false
+        this.transactionsMemory = []
+        this.transactionsInLastBlock = []
+    }
+
+    awaitDoneSyncing() {
+        const self = setInterval(async () => {
+            if (this.isDoneSyncing) {
+                clearInterval(self)
+
+                // console.log('transactionsInLastBlock');
+                // console.log(this.transactionsInLastBlock);
+                //
+                // console.log('memory');
+                // console.log(this.transactionsMemory);
+
+                // Sometimes the listener goes a bit bezerk e.g. it tries to resync blocks causing duplicates to form.
+                // Also, other duplicates might form since toBlock (in the queryFilter function) is the same block as the one our Listener starts with
+                if (!this.transactionsMemory.length) return
+                if (!this.transactionsInLastBlock.length) {
+                    this.modelAndInsertTransactions(this.transactionsMemory) // it didn't record any new transactions in the backfill current block
+                    return
+                }
+
+                // both arrays have lengths (else they'd return already), so now cross-compare.
+                const blockNumber = this.transactionsInLastBlock[0].blockNumber
+                const logsIndexes = this.transactionsInLastBlock.map(tx => tx.logIndex)
+                const validTransactions = this.transactionsMemory.filter(tx => {
+                    if (tx.blockNumber < blockNumber) return false
+                    if (logsIndexes.includes(tx.logIndex)) return false
+                    return true
+                })
+
+                this.modelAndInsertTransactions(validTransactions)
+            }
+        }, 2000)
     }
 
     async synchronize() {
         try {
 
+            if (pollingEnabled) {
+                this.awaitDoneSyncing()
+                this.initiatePolling()
+            }
+
             // No need to transform all transactions per interval as they're literally all the same *before* they're turned into candlesticks
             // Make new array starting from the oldest block (this array is the same length as intervals, so we can peg the index)
             // If the candle doesn't exist yet, then the hardcoded contract.fromBlock will be returned.
             // Also store the last recorded candlesticks from the database.
-            const [ fromBlocks, lastSavedCandlesticksPerInterval ]= await Promise.all([
+            const [ fromBlocks, lastSavedCandlesticksPerInterval, lastSavedTransactionBlockNumber ] = await Promise.all([
                   getFromBlocksPerInterval({ poolContract: this.pool.poolContract, fromBlock: this.pool.fromBlock })
                 , getLastSavedCandlesticksPerInterval({ poolContract: this.pool.poolContract })
+                , getLastSavedTransactionBlockNumber({ poolContract: this.pool.poolContract })
             ])
 
-            if (pollingEnabled) {
-                this.initiatePolling()
-            }
+            // The oldest block is the one that needs the most new transactions
+            let oldestBlock = Math.min(...fromBlocks)
+
+            oldestBlock = (lastSavedTransactionBlockNumber)
+                ? Math.max(lastSavedTransactionBlockNumber, oldestBlock)
+                : oldestBlock
 
             // Init the watchers (per pool & per interval)
-            for (let i = 0; i < supportedIntervals.length; i++) {
-                const interval = supportedIntervals[i]
-                const lastSavedCandlestick = lastSavedCandlesticksPerInterval[interval]
-                const watcher = new Watcher(this, {
-                    interval: interval,
-                    fromBlock: fromBlocks[i],
-                    lastSavedCandlestick: lastSavedCandlestick,
-                })
-                this.watchers.push(watcher)
-            }
-
-            // The oldest block is the one that contains unique tx's, later on when the other intervals share the same tx's => split them
-            const oldestBlock = Math.min(...fromBlocks)
+            // for (let i = 0; i < supportedIntervals.length; i++) {
+            //     const interval = supportedIntervals[i]
+            //     const lastSavedCandlestick = lastSavedCandlesticksPerInterval[interval]
+            //     const watcher = new Watcher(this, {
+            //         interval: interval,
+            //         fromBlock: fromBlocks[i],
+            //         lastSavedCandlestick: lastSavedCandlestick,
+            //     })
+            //     this.watchers.push(watcher)
+            // }
 
             // Get all transactions since the oldest block (returns native JSON-RPC response formatting)
             // Can return an empty array [], as candlesticks still need to be formed.
-            const transactionHistory = await providerController.getTransactionHistoryForContract({
-                poolContract: this.pool.poolContract,
-                poolABI: this.pool.poolABI,
-                eventName: this.getEventName(),
-                fromBlock: oldestBlock,
-                toBlock: await providerController.getLatestBlockNumber()  // must be a number so "latest" doesn't work
-            })
-            if (!transactionHistory) throw new Error("TransactionHistory has thrown an unknown error")
-            logger.info(`Processing ${transactionHistory.length} transactions for ${this.pool.poolContract}`)
+            // This can be a heavy task when there's 100's of thousands of transactions => batching them into smaller chunks.
+            const latestBlockNumber = await providerController.getLatestBlockNumber()
 
-            if (!transactionHistory.length) {
-                logger.info("There seems to be no transactionHistory for this pool, retrying in 10 minutes.")
-                this.disablePolling()
-                await _sleep(20000) // try again in 2 seconds
-                return this.synchronize()
-            }
+            const batchSizing = 1000
+            let from = oldestBlock + 1
+            let to = from + batchSizing
 
-            // Make the transactionHistory more readable, even if there are 0 tx's (0 tx's are still valid for candlesticks)
-            // Use specific event logs as written in the contract ABI, this function is found in the various protocol files.
-            // Contains a promise for the timestamp (so we can resolve them asynchronously later)
-            let simplifiedTransactionHistory = this.simplifyTransactions({
-                transactionHistory: transactionHistory,
-                pool: this.pool,
-            })
-            if (containsNull(simplifiedTransactionHistory)) throw new Error("simplifiedTransactionHistory contains a nullified value")
-
-            // Resolve timestamps
-            let resolvedSimplifiedTransactionHistory = await this._resolveSimplifiedTransactionHistory(simplifiedTransactionHistory)
-            if (!resolvedSimplifiedTransactionHistory || containsNull(resolvedSimplifiedTransactionHistory)) {
-                // try again
-                logger.warn("simplifiedTransactionHistory returned an error, most likely to do with the promises.. Retrying again in 30 seconds.")
-                await _sleep(30000) // try again in 30 seconds
-                resolvedSimplifiedTransactionHistory = await this._resolveSimplifiedTransactionHistory(simplifiedTransactionHistory)
-
-                if (!resolvedSimplifiedTransactionHistory) {
-                  logger.info("resolvedSimplifiedTransactionHistory returned another error, retrying in 10 minutes.")
-                  this.disablePolling()
-                  await _sleep(20000) // try again in 20 seconds
-                  return this.synchronize()
+            while (from < latestBlockNumber) {
+                if (to > latestBlockNumber) to = latestBlockNumber
+                const transactionHistory = await providerController.getTransactionHistoryForContract({
+                    poolContract: this.pool.poolContract,
+                    poolABI: this.pool.poolABI,
+                    eventName: this.getEventName(),
+                    fromBlock: from,
+                    toBlock: to
+                })
+                if (!transactionHistory) throw new Error("transactionHistory has thrown an unknown error")
+                if (!transactionHistory.length) {
+                    from = to + 1
+                    to = from + batchSizing
+                    continue
                 }
+
+                // Make the transactionHistory more readable, even if there are 0 tx's (0 tx's are still valid for candlesticks)
+                // Use specific event logs as written in the contract ABI, this function is found in the various protocol files.
+                // Contains a promise for the timestamp (so we can resolve them asynchronously later)
+                let simplifiedTransactionHistory = this.simplifyTransactions({
+                    transactionHistory: transactionHistory,
+                    pool: this.pool,
+                })
+                if (containsNull(simplifiedTransactionHistory)) throw new Error("simplifiedTransactionHistory contains a nullified value")
+
+                // Resolve timestamps
+                let resolvedSimplifiedTransactionHistory = await this._resolveSimplifiedTransactionHistory(simplifiedTransactionHistory)
+
+                // Store the last transaction that we backfill (is used by awaitDoneSyncing function) so we know what our latest blockNumber is
+                // reset on each iteration (so only the last one is actually used)
+                this.transactionsInLastBlock = [ resolvedSimplifiedTransactionHistory[resolvedSimplifiedTransactionHistory.length - 1]]
+
+                // Save the transactions
+                this.modelAndInsertTransactions(resolvedSimplifiedTransactionHistory)
+
+                from = to + 1
+                to = from + batchSizing
             }
 
-            // Reminder that each watcher represents a pool & a specific interval in that pool.
-            this.watchers.forEach((watcher, i) => {
-                watcher.insertInitialTransactionHistory(resolvedSimplifiedTransactionHistory)
-            });
+            this.isDoneSyncing = true
+            logger.info("Done synchronizing...");
 
         } catch (err) {
+            this.disablePolling()
+            this.isDoneSyncing = false
             logger.error(err)
         }
     } // End of synchronize
@@ -104,7 +151,7 @@ module.exports = class Master {
         } catch (err) {
             logger.error(err)
         }
-    }
+    } // End of disablePolling
 
     initiatePolling() {
         try {
@@ -129,24 +176,42 @@ module.exports = class Master {
                 })
                 if (containsNull(simplifiedTransactionHistory)) throw new Error("simplifiedTransactionHistory contains a nullified value")
 
-                logger.debug("Incoming transaction:")
-                logger.debug(JSON.stringify(simplifiedTransactionHistory))
-
                 // Resolve timestamps
-                simplifiedTransactionHistory = await this._resolveSimplifiedTransactionHistory(simplifiedTransactionHistory) // issue
+                let resolvedSimplifiedTransactionHistory = await this._resolveSimplifiedTransactionHistory(simplifiedTransactionHistory) // issue
 
-                this.watchers.forEach((watcher, i) => {
-                    watcher.addTransactionToMemory(simplifiedTransactionHistory[0]) // 0 because it's always a singulair array
-                });
-
+                if (this.isDoneSyncing) {
+                    this.modelAndInsertTransactions(resolvedSimplifiedTransactionHistory)
+                } else {
+                    this.transactionsMemory.push(...resolvedSimplifiedTransactionHistory)
+                }
             } // End of eventCB
 
             this.contractListener.on(this.getEventName(), eventCB)
+            logger.info(`Listening to incoming transactions for: ${this.pool.poolContract}`)
 
         } catch (err) {
             logger.error(err)
         }
-    }
+    } // End of initiatePolling
+
+    modelAndInsertTransactions = (resolvedSimplifiedTransactionHistory) => {
+        try {
+            const modeledTransactions = resolvedSimplifiedTransactionHistory.map(tx => {
+                return new TransactionTransporter(
+                    this.pool.protocol,
+                    this.pool.poolContract,
+                    tx.timestamp,
+                    tx.blockNumber,
+                    tx.volume,
+                    tx.price,
+                    tx.logIndex,
+                )
+            })
+            transactionController.insertTransactions(modeledTransactions)
+        } catch (err) {
+            logger.error(err)
+        }
+    } // End of modelAndInsertTransactions
 
     /**
      * This is an internal function and should be called by the various protocol classes. Whereas they dissect
@@ -165,8 +230,12 @@ module.exports = class Master {
         inversePrice = null,
     } = {}) => {
         try {
-            if (!transaction || !tokenAmount || !pairAmount || inversePrice == null) throw new Error("Params are missing")
+            if (!transaction || !tokenAmount == null || !pairAmount == null || inversePrice == null) throw new Error("Params are missing")
             if (typeof tokenAmount != "number" || typeof pairAmount != "number" || typeof inversePrice != "boolean") throw new Error("Params have incorrect types")
+
+            if (tokenAmount == 0 || pairAmount == 0) return {
+                DIV_BY_ZERO: true
+            }
 
             const price = (!inversePrice)
                 ? Number((tokenAmount / pairAmount).toFixed(10))
@@ -176,9 +245,14 @@ module.exports = class Master {
                 timestamp: transaction.getBlock(),
                 blockNumber: transaction.blockNumber,
                 volume: pairAmount,
-                price: price
+                price: price,
+                logIndex: transaction.logIndex,
             }
         } catch (err) {
+            console.log(transaction);
+            console.log(tokenAmount);
+            console.log(pairAmount);
+            console.log(inversePrice);
             throw err
         }
     } // End of _formatSimplifiedTransaction
@@ -221,6 +295,7 @@ async function getFromBlocksPerInterval({
     fromBlock = null,
 } = {}) {
     try {
+        if (!poolContract || !fromBlock) throw new Error("Params are missing")
         const promises = supportedIntervals.map(interval => {
             return _chooseFromBlock({
                 interval: interval,
@@ -240,6 +315,7 @@ async function getLastSavedCandlesticksPerInterval({
     poolContract = null,
 } = {}) {
     try {
+        if (!poolContract) throw new Error("Params are missing")
         const promises = supportedIntervals.map(interval => {
             return candlestickController.getLastSavedCandlestick({
                 poolContract: poolContract,
@@ -257,6 +333,47 @@ async function getLastSavedCandlesticksPerInterval({
     }
 } // End of getLastSavedCandlesticksPerInterval
 
+async function getLastSavedTransaction({
+    poolContract = null,
+} = {}) {
+    try {
+        if (!poolContract) throw new Error("Params are missing")
+        return transactionController.getLastSavedTransaction({
+            poolContract: poolContract,
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of getLastSavedTransaction
+
+async function getLastSavedTransactionBlockNumber({
+    poolContract = null,
+} = {}) {
+    try {
+        if (!poolContract) throw new Error("Params are missing")
+        return transactionController.getLastSavedTransactionBlockNumber({
+            poolContract: poolContract,
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of getLastSavedTransactionBlockNumber
+
+async function getSavedTransactionsInBlock({
+    poolContract = null,
+    blockNumber = null
+} = {}) {
+    try {
+        if (!poolContract || !blockNumber) throw new Error("Params are missing")
+        return transactionController.getSavedTransactionsInBlock({
+            poolContract: poolContract,
+            blockNumber: blockNumber,
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of getLastSavedTransactionBlockNumber
+
 async function _chooseFromBlock ({
     interval = null,
     poolContract = null,
@@ -264,20 +381,20 @@ async function _chooseFromBlock ({
 } = {}) {
     try {
         if (!interval || !poolContract || !fromBlock) throw new Error("Params are missing");
-        const lastCandlestickBlockNumber = await candlestickController.getLastSavedCandlestickBlocknumber({
+        const lastCandlestickBlockNumber = await candlestickController.getLastSavedCandlestickBlockNumber({
             poolContract: poolContract,
             interval: interval,
         })
         return (!lastCandlestickBlockNumber)
             ? fromBlock
-            : lastCandlestickBlockNumber + 1
+            : lastCandlestickBlockNumber
     } catch (err) {
         logger.error(err);
         return null
     }
 } // End of _chooseFromBlock
 
-function _sleep(ms) {
+function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });

@@ -8,9 +8,9 @@ const getLastSavedCandlestick = async (args) => {
     }
 };
 
-const getLastSavedCandlestickBlocknumber = async (args) => {
+const getLastSavedCandlestickBlockNumber = async (args) => {
     try {
-        return await candlestickService.getLastSavedCandlestickBlocknumber(args)
+        return await candlestickService.getLastSavedCandlestickBlockNumber(args)
     } catch (err) {
         throw err
     }
@@ -26,6 +26,6 @@ const insertCandlesticks = async (args) => {
 
 module.exports = {
     getLastSavedCandlestick,
-    getLastSavedCandlestickBlocknumber,
+    getLastSavedCandlestickBlockNumber,
     insertCandlesticks
 }

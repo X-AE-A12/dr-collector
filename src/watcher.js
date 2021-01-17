@@ -7,7 +7,7 @@ const { containsNull } = require("./utils")
 const { candlestickController, providerController } = require("./controllers")
 const { pollingEnabled } = require('./config/config');
 const EventEmitter = require('./eventEmitter');
-const CandlestickTransporter = require("./dict/candlestick.dict")
+const CandlestickTransporter = require("./transporters/candlestick.transporter")
 
 module.exports = class Watcher {
     constructor( master, extra ) {

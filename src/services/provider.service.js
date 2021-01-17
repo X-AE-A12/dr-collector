@@ -3,8 +3,8 @@ const ethers = require("ethers")
 const config = require("../config/config")
 const logger = require("../config/logger")
 
-var url = 'https://still-old-pond.quiknode.pro/3713150cb11770d18c2c996f9d0ebc15d63e5866/';
-var Provider = new ethers.providers.JsonRpcProvider(url);
+const url = config.QUIKNODE_API_KEY
+const Provider = new ethers.providers.JsonRpcProvider(url);
 
 // https://docs.ethers.io/v5/api/contract/contract/#Contract--creating
 const getContractListener = ({
@@ -18,7 +18,7 @@ const getContractListener = ({
         logger.error("Unable to fetch the contractListener")
         throw err
     }
-} // End of getContractListener
+}; // End of getContractListener
 
 const getTransactionHistoryForContract = async ({
     poolContract = null,
@@ -61,13 +61,13 @@ const getTransactionHistoryForContract = async ({
                 logger.warn("=======================");
                 return await getTransactionHistoryForContract({poolContract, poolABI, eventName, fromBlock, toBlock: toBlock - 1})
             }
-            throw err.error
+            throw err
         })
         return result
     } catch (err) {
         throw err
     }
-};
+}; // End of getTransactionHistoryForContract
 
 const _getContractListener = ({
     poolContract = null,
@@ -80,17 +80,18 @@ const _getContractListener = ({
         logger.error("Unable to fetch the contract listener")
         throw err
     }
-}
+} // End of _getContractListener
 
 const getLatestBlockNumber = async () => {
     try {
+        await Provider.ready
         const result = await Provider.getBlockNumber()
         return result
     } catch (err) {
-        logger.error("unable to get the latest block number")
+        logger.error("Unable to get the latest block number")
         throw err
     }
-} // End of get_latest_block_number
+} // End of getLatestBlockNumber
 
 module.exports = {
     getContractListener,

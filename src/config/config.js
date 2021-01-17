@@ -9,7 +9,7 @@ const envVarsSchema = Joi.object()
       NODE_ENV: Joi.string().valid('production', 'development', 'test').required(),
       PORT: Joi.number().default(3000),
       MONGODB_URL: Joi.string().required().description('Mongo DB url'),
-      ALCHEMY_API_KEY: Joi.string().required().description('Alchemy API KEY'),
+      QUIKNODE_API_KEY: Joi.string().required().description('Quiknode API KEY'),
   })
   .unknown();
 
@@ -32,15 +32,14 @@ module.exports = {
 
     // network
     network: "homestead", // mainnet
-    ALCHEMY_API_KEY: envVars.ALCHEMY_API_KEY,
-    // INFURA_PROJECT_ID: process.env.INFURA_PROJECT_ID,
-    // INFURA_PROJECT_SECRET: process.env.INFURA_PROJECT_SECRET,
+    QUIKNODE_API_KEY: envVars.QUIKNODE_API_KEY,
 
     // dev config
-    pollingEnabled:       false,
-    insertCandles:        true,
-    deleteCandles:        false,
-    modifyLiveCandles:    false,
+    pollingEnabled:             true,
+    allowCandlestickInsertion:  false,
+    allowCandlestickDeletion:   false,
+    allowTransactionInsertion:  true,
+    modifyLiveCandles:          false,
 
     // workers
     enableWorkers:       false,
