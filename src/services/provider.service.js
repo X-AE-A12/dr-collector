@@ -1,0 +1,99 @@
+const ethers = require("ethers")
+
+const config = require("../config/config")
+const logger = require("../config/logger")
+
+var url = 'https://still-old-pond.quiknode.pro/3713150cb11770d18c2c996f9d0ebc15d63e5866/';
+var Provider = new ethers.providers.JsonRpcProvider(url);
+
+// https://docs.ethers.io/v5/api/contract/contract/#Contract--creating
+const getContractListener = ({
+    poolContract = null,
+    poolABI = null
+} = {}) => {
+    try {
+        if (!poolContract || !poolABI) throw new Error("Params are missing")
+        return new ethers.Contract(poolContract, poolABI, Provider)
+    } catch (err) {
+        logger.error("Unable to fetch the contractListener")
+        throw err
+    }
+} // End of getContractListener
+
+const getTransactionHistoryForContract = async ({
+    poolContract = null,
+    poolABI = null,
+    eventName = null,
+    fromBlock = null,
+    toBlock = null
+} = {}) => {
+    try {
+        if (!poolContract || !poolABI || !eventName || !fromBlock || !toBlock) throw new Error("Params missing");
+        if (typeof fromBlock != "number" || typeof toBlock != "number") throw new Error("fromBlock or toBlock should be numbers");
+        if (fromBlock >= toBlock) return []
+
+        const listener = _getContractListener({
+            poolContract: poolContract,
+            poolABI: poolABI,
+        })
+
+        const result = await listener.queryFilter(
+            eventName,
+            fromBlock,
+            toBlock
+        ).catch(async err => {
+            if (
+                    err.error == "Error: query returned more than 10000 results"
+                ||  err.error == "Error: Log response size exceeded. You can make eth_getLogs requests with up to a 2K block range and no limit on the response size, or you can request any block range with a cap of 10K logs in the response."
+            ) {
+                // The query returned more than 10k results, batching into 10k segments => rinse repeat
+                const midBlock = (fromBlock + toBlock) >> 1
+                const promise1 = getTransactionHistoryForContract({poolContract, poolABI, eventName, fromBlock, toBlock: midBlock})
+                const promise2 = getTransactionHistoryForContract({poolContract, poolABI, eventName, fromBlock: midBlock + 1, toBlock})
+                const [ arr1, arr2 ] = await Promise.all([promise1, promise2])
+                return [...arr1, ...arr2]
+            }
+            if (err.error == "Error: One of the blocks specified in filter (fromBlock, toBlock or blockHash) cannot be found") {
+                logger.warn("=======================");
+                logger.warn("Error: One of the blocks specified in filter (fromBlock, toBlock or blockHash) cannot be found. This is a caching problem with Quiknode.");
+                logger.warn(`fromBlock: ${fromBlock}, toBlock: ${toBlock}`);
+                logger.warn("Retrying with toBlock -1");
+                logger.warn("=======================");
+                return await getTransactionHistoryForContract({poolContract, poolABI, eventName, fromBlock, toBlock: toBlock - 1})
+            }
+            throw err.error
+        })
+        return result
+    } catch (err) {
+        throw err
+    }
+};
+
+const _getContractListener = ({
+    poolContract = null,
+    poolABI = null
+}) => {
+    try {
+        if (!poolContract || !poolABI) throw new Error("Params are missing")
+        return new ethers.Contract(poolContract, poolABI, Provider)
+    } catch (err) {
+        logger.error("Unable to fetch the contract listener")
+        throw err
+    }
+}
+
+const getLatestBlockNumber = async () => {
+    try {
+        const result = await Provider.getBlockNumber()
+        return result
+    } catch (err) {
+        logger.error("unable to get the latest block number")
+        throw err
+    }
+} // End of get_latest_block_number
+
+module.exports = {
+    getContractListener,
+    getTransactionHistoryForContract,
+    getLatestBlockNumber,
+}
