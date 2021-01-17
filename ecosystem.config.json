@@ -7,7 +7,7 @@
       "autorestart": true,
       "watch": false,
       "time": true,
-      "instances": 1,
+      "instances": "max",
       "exec_mode": "cluster",
       "env": {
         "NODE_ENV": "production"
