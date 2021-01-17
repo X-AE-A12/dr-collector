@@ -18,14 +18,11 @@ if (error) {
     throw new Error(`Config validation error: ${error.message}`);
 }
 
-console.log(envVars.NODE_ENV);
 module.exports = {
     env: envVars.NODE_ENV,
     port: envVars.PORT,
     mongoose: {
-        url: (envVars.NODE_ENV == 'production')
-            ? envVars.MONGODB_URL
-            : 'mongodb://127.0.0.1:27017/candlesticks' + (envVars.NODE_ENV === 'test' ? '-test' : ''),
+        url: envVars.MONGODB_URL + (envVars.NODE_ENV === 'test' ? '-test' : ''),
         options: {
           useCreateIndex: true,
           useNewUrlParser: true,
