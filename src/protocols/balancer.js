@@ -24,6 +24,7 @@ module.exports = class Balancer extends Master {
             for (let i = 0; i < transactionHistory.length; i++) {
                 const transaction = transactionHistory[i]
 
+                const contractIn = tx.args.tokenIn
                 const amountIn =  this._bigNumberToNumber(transaction.args.tokenAmountIn)
                 const amountOut = this._bigNumberToNumber(transaction.args.tokenAmountOut)
 
@@ -31,7 +32,7 @@ module.exports = class Balancer extends Master {
                 let pairAmount
 
                 // Selling the token
-                if (amount1In == 0) {
+                if (contractIn.toUpperCase() == this.pool.tokenContract.toUpperCase()) {
                     tokenAmount = amountIn * Number(`1e-${tokenDecimals}`)
                     pairAmount = amountOut * Number(`1e-${pairDecimals}`)
 
