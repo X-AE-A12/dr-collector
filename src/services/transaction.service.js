@@ -55,6 +55,19 @@ const getSavedTransactionsInBlock = async ({
     }
 }; // End of getLastSavedTransactionBlockNumber
 
+const getAllSavedTransactions = async ({
+    poolContract = null,
+} = {}) => {
+    try {
+        if (!poolContract) throw new Error("Params are missing")
+        const query = {
+            poolContract: poolContract,
+        }
+        return await TransactionModel.find(query)
+    } catch (err) {
+        throw err
+    }
+}; // End of getLastSavedTransactionBlockNumber
 
 const insertTransactions = (transactions) => {
     try {
@@ -72,5 +85,6 @@ module.exports = {
     getLastSavedTransaction,
     getLastSavedTransactionBlockNumber,
     getSavedTransactionsInBlock,
+    getAllSavedTransactions,
     insertTransactions,
 };

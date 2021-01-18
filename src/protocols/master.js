@@ -5,12 +5,11 @@ const { candlestickController, transactionController, providerController } = req
 const { pollingEnabled, supportedIntervals } = require('../config/config');
 const { containsNull } = require('../utils')
 const TransactionTransporter = require("../transporters/transaction.transporter")
-const Watcher = require("../watcher")
+// const CandlestickBuilder = require("../candlestickBuilder")
 
 module.exports = class Master {
     constructor(pool){
         this.pool = pool
-        this.watchers = []
         this.contractListener = undefined
         this.isDoneSyncing = false
         this.transactionsMemory = []
@@ -21,12 +20,6 @@ module.exports = class Master {
         const self = setInterval(async () => {
             if (this.isDoneSyncing) {
                 clearInterval(self)
-
-                // console.log('transactionsInLastBlock');
-                // console.log(this.transactionsInLastBlock);
-                //
-                // console.log('memory');
-                // console.log(this.transactionsMemory);
 
                 // Sometimes the listener goes a bit bezerk e.g. it tries to resync blocks causing duplicates to form.
                 // Also, other duplicates might form since toBlock (in the queryFilter function) is the same block as the one our Listener starts with
@@ -74,18 +67,6 @@ module.exports = class Master {
             oldestBlock = (lastSavedTransactionBlockNumber)
                 ? Math.max(lastSavedTransactionBlockNumber, oldestBlock)
                 : oldestBlock
-
-            // Init the watchers (per pool & per interval)
-            // for (let i = 0; i < supportedIntervals.length; i++) {
-            //     const interval = supportedIntervals[i]
-            //     const lastSavedCandlestick = lastSavedCandlesticksPerInterval[interval]
-            //     const watcher = new Watcher(this, {
-            //         interval: interval,
-            //         fromBlock: fromBlocks[i],
-            //         lastSavedCandlestick: lastSavedCandlestick,
-            //     })
-            //     this.watchers.push(watcher)
-            // }
 
             // Get all transactions since the oldest block (returns native JSON-RPC response formatting)
             // Can return an empty array [], as candlesticks still need to be formed.
@@ -136,7 +117,11 @@ module.exports = class Master {
             }
 
             this.isDoneSyncing = true
-            logger.info("Done synchronizing...");
+            logger.info(`Done synchronizing ${this.pool.poolContract}`);
+
+            // Init the candlestickBuilder, this is where we transform all transactions into candlesticks
+            // const candlestickBuilder = new CandlestickBuilder(this.pool)
+            // candlestickBuilder.init()
 
         } catch (err) {
             this.disablePolling()
