@@ -248,7 +248,8 @@ module.exports = class Master {
             const promises = simplifiedTransactionHistory.map(tx => tx.timestamp)
             const timestamps = await Promise.all(promises)
             return simplifiedTransactionHistory.reduce((acc, transaction, index) => {
-                transaction.timestamp = timestamps[index].timestamp
+                transaction.timestamp = timestamps[index].timestamp  // TODO: fix error: TypeError: Cannot read property 'timestamp' of null at ~root\src\protocols\master.js:251:59
+                // above error happens at random, and has to do with the internet connection and Provider failing to send a proper response. 
                 acc.push(transaction)
                 return acc
             }, [])
