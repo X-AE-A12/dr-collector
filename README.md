@@ -10,7 +10,7 @@ This is still a work in progress, so far we can only listen to & backfill transa
 
 #### Setup
 - Copy `env.example` and fill in the blanks. To use Quiknode you must have an account (there is no free plan, cheapest is 10$ a month). All other ETH Providers are not fit for the job as this requires heavy load upon synchronization (can take hundreds of thousands of transactions to fetch). Quicknode doesn't have a rate limit so processing time is in our favor.
-- Alter config in `~/src/config/config` (perhaps the allowTransactionInsertion & allowTransactionInsertion fields when testing)
+- Alter config in `~/src/config/config` (perhaps the pollingEnabled & allowTransactionInsertion fields when testing)
 
 #### How it Works
 - Contracts that we intend to track are listed in `~/src/config/pools`
