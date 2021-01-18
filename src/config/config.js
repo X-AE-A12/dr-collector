@@ -2,6 +2,8 @@ const dotenv = require('dotenv');
 const path = require('path');
 const Joi = require('joi');
 
+const intervals = require("./intervals")
+
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const envVarsSchema = Joi.object()
@@ -18,7 +20,7 @@ if (error) {
     throw new Error(`Config validation error: ${error.message}`);
 }
 
-module.exports = {
+const self = module.exports = {
     env: envVars.NODE_ENV,
     port: envVars.PORT,
     mongoose: {
@@ -38,17 +40,17 @@ module.exports = {
     pollingEnabled:             true,
     allowCandlestickInsertion:  false,
     allowCandlestickDeletion:   false,
-    allowTransactionInsertion:  true,
+    allowTransactionInsertion:  false,
     modifyLiveCandles:          false,
 
     // workers
     enableWorkers:       false,
     updateInfo:          false,
 
-    // exchanges (supported is used internally, api is used by Tradingview
     // even if there are NO pools we can still return these values
-    supportedExchanges: [ "balancer", "uniswap" ],
-    supportedExchangesAPI: [
+    // this config has no internal use, its only used for the external API.
+    // internal use is simply by resolving files in the ~src/protocols dir
+    supportedProtocols: [
         {
           value: 'balancer',
           name: 'balancer',
@@ -63,20 +65,8 @@ module.exports = {
         },
     ],
 
-    // intervals (supported is used internally, api is for Tradingview to use)
-    // supported_intervals: [ "1m", "5m", "15m", "30m", "1h", "4h", "1d" ],
-    supportedIntervals: [ "1m" ],
-    supportedIntervalsAPI: [
-        { tv: "1", api: "1m" },
-        { tv: "5", api: "5m" },
-        { tv: "15", api: "15m" },
-        { tv: "30", api: "30m" },
-        { tv: "60", api: "1h" },
-        { tv: "240", api: "4h" },
-        { tv: "1440", api: "1d" },
-    ],
-
-    // config for the listener schedule (when a candle should close)
-    intervalJobs: require("./intervalJobs"),
+    supportedIntervals: (envVars.NODE_ENV == "development")
+        ? [{ internal: "1m", intervalInSeconds: 60 }]
+        : intervals.map(o => { return {internal: o.internal, intervalInSeconds: o.intervalInSeconds} }),
 
 };

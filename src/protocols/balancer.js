@@ -25,8 +25,8 @@ module.exports = class Balancer extends Master {
                 const transaction = transactionHistory[i]
 
                 const contractIn = tx.args.tokenIn
-                const amountIn =  this._bigNumberToNumber(transaction.args.tokenAmountIn)
-                const amountOut = this._bigNumberToNumber(transaction.args.tokenAmountOut)
+                const amountIn =  this.bigNumberToNumber(transaction.args.tokenAmountIn)
+                const amountOut = this.bigNumberToNumber(transaction.args.tokenAmountOut)
 
                 let tokenAmount
                 let pairAmount
@@ -42,7 +42,7 @@ module.exports = class Balancer extends Master {
                     pairAmount = amountIn * Number(`1e-${pairDecimals}`)
                 }
 
-                const simplifiedTransaction = this._formatSimplifiedTransaction({
+                const simplifiedTransaction = this.formatSimplifiedTransaction({
                     transaction: transaction,
                     tokenAmount: tokenAmount,
                     pairAmount: pairAmount,

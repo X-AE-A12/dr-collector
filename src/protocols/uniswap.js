@@ -24,10 +24,10 @@ module.exports = class Uniswap extends Master {
             for (let i = 0; i < transactionHistory.length; i++) {
                 const transaction = transactionHistory[i]
 
-                const amount0In =  this._bigNumberToNumber(transaction.args.amount0In)
-                const amount1In =  this._bigNumberToNumber(transaction.args.amount1In)
-                const amount0Out = this._bigNumberToNumber(transaction.args.amount0Out)
-                const amount1Out = this._bigNumberToNumber(transaction.args.amount1Out)
+                const amount0In =  this.bigNumberToNumber(transaction.args.amount0In)
+                const amount1In =  this.bigNumberToNumber(transaction.args.amount1In)
+                const amount0Out = this.bigNumberToNumber(transaction.args.amount0Out)
+                const amount1Out = this.bigNumberToNumber(transaction.args.amount1Out)
 
                 let tokenAmount
                 let pairAmount
@@ -43,7 +43,7 @@ module.exports = class Uniswap extends Master {
                     pairAmount = amount1In * Number(`1e-${pairDecimals}`)
                 }
 
-                const simplifiedTransaction = this._formatSimplifiedTransaction({
+                const simplifiedTransaction = this.formatSimplifiedTransaction({
                     transaction: transaction,
                     tokenAmount: tokenAmount,
                     pairAmount: pairAmount,
