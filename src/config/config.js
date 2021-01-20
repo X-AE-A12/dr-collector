@@ -40,7 +40,7 @@ const self = module.exports = {
     pollingEnabled:             true,
     allowCandlestickInsertion:  false,
     allowCandlestickDeletion:   false,
-    allowTransactionInsertion:  false,
+    allowTransactionInsertion:  true,
     modifyLiveCandles:          false,
 
     // workers
