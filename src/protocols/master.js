@@ -25,7 +25,7 @@ module.exports = class Master {
                 // Also, other duplicates might form since toBlock (in the queryFilter function) is the same block as the one our Listener starts with
                 if (!this.transactionsMemory.length) return
                 if (!this.transactionsInLastBlock.length) {
-                    this.modelAndInsertTransactions(this.transactionsMemory) // it didn't record any new transactions in the backfill current block
+                    this.modelAndInsertTransactions(this.transactionsMemory) // it didn't record any new transactions in the backfill's current block
                     return
                 }
 
@@ -40,7 +40,7 @@ module.exports = class Master {
 
                 this.modelAndInsertTransactions(validTransactions)
             }
-        }, 2000)
+        }, 10000)
     }
 
     async synchronize() {
@@ -107,7 +107,7 @@ module.exports = class Master {
                 if (!resolvedSimplifiedTransactionHistory) throw new Error("resolveSimplifiedTransactionHistory returned an error")
 
                 // Store the last transaction that we backfill (is used by awaitDoneSyncing function) so we know what our latest blockNumber is
-                // reset on each iteration (so only the last one is actually used)
+                // resets on each iteration (so only the last one is actually used)
                 this.transactionsInLastBlock = [ resolvedSimplifiedTransactionHistory[resolvedSimplifiedTransactionHistory.length - 1]]
 
                 // Save the transactions
@@ -163,7 +163,7 @@ module.exports = class Master {
                 if (containsNull(simplifiedTransactionHistory)) throw new Error("simplifiedTransactionHistory contains a nullified value")
 
                 // Resolve timestamps
-                let resolvedSimplifiedTransactionHistory = await this.resolveSimplifiedTransactionHistory(simplifiedTransactionHistory) // issue
+                let resolvedSimplifiedTransactionHistory = await this.resolveSimplifiedTransactionHistory(simplifiedTransactionHistory)
                 if (!resolvedSimplifiedTransactionHistory) throw new Error("resolveSimplifiedTransactionHistory returned an error")
 
                 if (this.isDoneSyncing) {
@@ -229,7 +229,7 @@ module.exports = class Master {
                 : Number((pairAmount / tokenAmount).toFixed(10))
 
             return {
-                timestamp: transaction.getBlock(),
+                block: transaction.getBlock(), // returns a promise => we need this to access the block.timestamp
                 blockNumber: transaction.blockNumber,
                 volume: pairAmount,
                 price: price,
@@ -247,27 +247,34 @@ module.exports = class Master {
     resolveSimplifiedTransactionHistory = async (simplifiedTransactionHistory) => {
         try {
             if (!simplifiedTransactionHistory || !simplifiedTransactionHistory.length) throw new Error("simplifiedTransactionHistory is an empty array")
-            const promises = simplifiedTransactionHistory.map(tx => tx.timestamp)
-            const timestamps = await Promise.all(promises)
-            return simplifiedTransactionHistory.reduce((acc, transaction, index) => {
-                try {
-                    transaction.timestamp = timestamps[index].timestamp  // TODO: fix error: TypeError: Cannot read property 'timestamp' of null at ~root\src\protocols\master.js:251:59
-                    // above error happens at random, and has to do with the Provider failing to send a proper response.
-                    acc.push(transaction)
-                    return acc
-                } catch (err) {
-                    console.log(err);
-                    if (err == "TypeError: Cannot read property 'timestamp' of null") {
-                        console.log('got the specific error');
-                    } else {
-                        console.log('didnt get the specific error aaaaaaaaaah');
+            const promises = simplifiedTransactionHistory.map(tx => tx.block)
+            const resolvedPromises = await Promise.allSettled(promises)
+
+            const results = []
+            for (let i = 0; i < simplifiedTransactionHistory.length; i++) {
+                const resolvedPromise = resolvedPromises[i]
+                const transaction = simplifiedTransactionHistory[i]
+                const { blockNumber } = transaction
+
+                if (resolvedPromise.status == "fulfilled") {
+                    delete transaction['block']
+                    transaction.timestamp = resolvedPromise.value.timestamp
+                    results.push(transaction)
+                } else {
+                    // An error occured, do a manual fetch later instead.
+                    logger.warn('An error occured with resolving blocks, retrying manually:  %O', resolvedPromise)
+                    const timestamp = await Helpers.getTimestampForSpecificBlock({ blockNumber: blockNumber })
+                    if (timestamp) {
+                        delete transaction['block']
+                        transaction.timestamp = timestamp
+                        results.push(transaction)
                     }
-                    console.log(promises[index]);
-                    console.log(timestamps[index]);
-                    // anyhow fuck it, let's skip this specific transaction for NOW
-                    return acc
+
+                    // if it still doesn't resolve then fuck it, log the tx but move on.
+                    logger.warn('Unable to fetch timestamp for transaction:  %O', transaction)
                 }
-            }, [])
+            }
+            return results
         } catch (err) {
             logger.error(err)
             return null
