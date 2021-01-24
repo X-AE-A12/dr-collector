@@ -114,6 +114,7 @@ module.exports = class CandlestickBuilder{
             const main = async () => {
                 const liveMemory = [...this.liveMemory]
                 this.liveMemory = []
+                if (!liveMemory.length) return
 
                 for (let i = 0; i < supportedIntervals.length; i++) {
                     const interval = supportedIntervals[i].interval

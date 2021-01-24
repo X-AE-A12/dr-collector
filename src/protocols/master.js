@@ -48,7 +48,7 @@ module.exports = class Master {
                 this.modelAndInsertTransactions(validTransactions)
                 this.candlestickBuilder.resolveTransactionsAllIntervals()
             }
-        }, 1000)
+        }, 10000)
     }
 
     async synchronize() {
@@ -84,10 +84,9 @@ module.exports = class Master {
             const latestBlockNumber = await Helpers.getLatestBlockNumber()
             logger.debug(`Processing ${latestBlockNumber - oldestBlock} blocks`)
 
-            const batchSizing = 1000
+            const batchSizing = 100 // limited due to Memory Usage // TODO: optimize this and see how we can make this less memory extensive
             let from = oldestBlock + 1
             let to = from + batchSizing
-
 
             while (from < latestBlockNumber) {
                 if (to > latestBlockNumber) to = latestBlockNumber
@@ -178,7 +177,7 @@ module.exports = class Master {
                 if (this.isDoneSyncing) {
                     this.modelAndInsertTransactions(resolvedSimplifiedTransactionHistory)
                     this.candlestickBuilder.pushTransactionToLiveMemory(resolvedSimplifiedTransactionHistory[0])
-                    logger.debug('New Transaction coming in: %O', resolvedSimplifiedTransactionHistory);
+                    // logger.debug('New Transaction coming in: %O', resolvedSimplifiedTransactionHistory);
                 } else {
                     this.transactionsMemory.push(...resolvedSimplifiedTransactionHistory)
                 }

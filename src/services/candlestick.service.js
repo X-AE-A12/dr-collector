@@ -14,10 +14,14 @@ const getLastSavedCandlestick = async ({
             poolContract: poolContract,
             i: interval
         }
+         // TODO: this can be extremely fucked (RAM usage) if we have a gazillion documents
+         // need to FIX THIS ASAP 
         const result = await CandlestickModel.aggregate([
             { $match: query },
-            { $sort: { t: -1} }
-        ])
+            { $sort: { t: -1} },
+            { $limit: 1 },
+        ]).allowDiskUse(true)
+
         return (result.length > 0)
             ? result[0]
             : null
@@ -101,7 +105,6 @@ const modifyLiveCandlestickOnTransaction = (
             upsert: false
         }, (err, result) => {
             if (err) throw err
-            console.log(result);
             return result
         })
     } catch (err) {

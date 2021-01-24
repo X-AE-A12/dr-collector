@@ -14,7 +14,7 @@ const candlestickSchema = mongoose.Schema({
     l:              {type: Number, required: true},
     c:              {type: Number, required: true},
     v:              {type: Number, required: true},   // volume of quote asset [ BAL:WETH 50:50 => in WETH]
-}, { timestamps: false })
+}, { timestamps: true })
 
 candlestickSchema.index({
     protocol: 1,
