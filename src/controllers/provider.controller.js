@@ -24,8 +24,17 @@ const getLatestBlockNumber = async () => {
     }
 };
 
+const getSpecificBlock = async (args) => {
+    try {
+        return await providerService.getSpecificBlock(args)
+    } catch (err) {
+        throw err
+    }
+};
+
 module.exports = {
     getContractListener,
     getTransactionHistoryForContract,
     getLatestBlockNumber,
+    getSpecificBlock,
 }

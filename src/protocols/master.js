@@ -11,11 +11,16 @@ module.exports = class Master {
     constructor(pool){
         this.pool = pool
         this.contractListener = undefined
+        this.candlestickBuilder = undefined
         this.isDoneSyncing = false
         this.transactionsMemory = []
         this.transactionsInLastBlock = []
     }
 
+    // Triggered on boot, destroys itself when it's done synchronizing
+    // This is important to use considering the backfill might take a long time for procession,
+    // whilst the ContractListener is already picking up new transactions (which it pushes to
+    // this.transactionsMemory).
     awaitDoneSyncing() {
         const self = setInterval(async () => {
             if (this.isDoneSyncing) {
@@ -23,13 +28,15 @@ module.exports = class Master {
 
                 // Sometimes the listener goes a bit bezerk e.g. it tries to resync blocks causing duplicates to form.
                 // Also, other duplicates might form since toBlock (in the queryFilter function) is the same block as the one our Listener starts with
-                if (!this.transactionsMemory.length) return
+                if (!this.transactionsMemory.length) {
+                    return this.candlestickBuilder.resolveTransactionsAllIntervals()
+                }
                 if (!this.transactionsInLastBlock.length) {
                     this.modelAndInsertTransactions(this.transactionsMemory) // it didn't record any new transactions in the backfill's current block
-                    return
+                    return this.candlestickBuilder.resolveTransactionsAllIntervals()
                 }
 
-                // both arrays have lengths (else they'd return already), so now cross-compare.
+                // Both arrays have lengths (else they'd return already), so now cross-compare.
                 const blockNumber = this.transactionsInLastBlock[0].blockNumber
                 const logsIndexes = this.transactionsInLastBlock.map(tx => tx.logIndex)
                 const validTransactions = this.transactionsMemory.filter(tx => {
@@ -39,25 +46,28 @@ module.exports = class Master {
                 })
 
                 this.modelAndInsertTransactions(validTransactions)
+                this.candlestickBuilder.resolveTransactionsAllIntervals()
             }
-        }, 10000)
+        }, 1000)
     }
 
     async synchronize() {
         try {
 
-            if (pollingEnabled) {
-                this.awaitDoneSyncing()
-                this.initiatePolling()
-            }
+            // Init the candlestickBuilder, this is where we transform all transactions into candlesticks
+            // This remains idle until this.isDoneSyncing returns true (see awaitDoneSyncing)
+            this.candlestickBuilder = new CandlestickBuilder(this.pool)
+            this.candlestickBuilder.init()
+
+            this.awaitDoneSyncing()
+            pollingEnabled && this.initiatePolling()
 
             // No need to transform all transactions per interval as they're literally all the same *before* they're turned into candlesticks
             // Make new array starting from the oldest block (this array is the same length as intervals, so we can peg the index)
             // If the candle doesn't exist yet, then the hardcoded contract.fromBlock will be returned.
             // Also store the last recorded candlesticks from the database.
-            const [ fromBlocks, lastSavedCandlesticksPerInterval, lastSavedTransactionBlockNumber ] = await Promise.all([
+            const [ fromBlocks, lastSavedTransactionBlockNumber ] = await Promise.all([
                   Helpers.getFromBlocksPerInterval({ poolContract: this.pool.poolContract, fromBlock: this.pool.fromBlock })
-                , Helpers.getLastSavedCandlesticksPerInterval({ poolContract: this.pool.poolContract })
                 , Helpers.getLastSavedTransactionBlockNumber({ poolContract: this.pool.poolContract })
             ])
 
@@ -72,10 +82,12 @@ module.exports = class Master {
             // Can return an empty array [], as candlesticks still need to be formed.
             // This can be a heavy task when there's 100's of thousands of transactions => batching them into smaller chunks.
             const latestBlockNumber = await Helpers.getLatestBlockNumber()
+            logger.debug(`Processing ${latestBlockNumber - oldestBlock} blocks`)
 
             const batchSizing = 1000
             let from = oldestBlock + 1
             let to = from + batchSizing
+
 
             while (from < latestBlockNumber) {
                 if (to > latestBlockNumber) to = latestBlockNumber
@@ -120,12 +132,9 @@ module.exports = class Master {
             this.isDoneSyncing = true
             logger.info(`Done synchronizing ${this.pool.poolContract}`);
 
-            // Init the candlestickBuilder, this is where we transform all transactions into candlesticks
-            // const candlestickBuilder = new CandlestickBuilder(this.pool)
-            // candlestickBuilder.init()
-
         } catch (err) {
             this.disablePolling()
+            this.candlestickBuilder.changeIsAllowedToBuildCandlesticks(false)
             this.isDoneSyncing = false
             logger.error(err)
         }
@@ -133,7 +142,7 @@ module.exports = class Master {
 
     disablePolling() {
         try {
-            this.contractListener.removeAllListeners()
+            this.contractListener && this.contractListener.removeAllListeners()
         } catch (err) {
             logger.error(err)
         }
@@ -162,12 +171,14 @@ module.exports = class Master {
                 })
                 if (containsNull(simplifiedTransactionHistory)) throw new Error("simplifiedTransactionHistory contains a nullified value")
 
-                // Resolve timestamps
+                // Resolve timestamps, array is length of 1
                 let resolvedSimplifiedTransactionHistory = await this.resolveSimplifiedTransactionHistory(simplifiedTransactionHistory)
                 if (!resolvedSimplifiedTransactionHistory) throw new Error("resolveSimplifiedTransactionHistory returned an error")
 
                 if (this.isDoneSyncing) {
                     this.modelAndInsertTransactions(resolvedSimplifiedTransactionHistory)
+                    this.candlestickBuilder.pushTransactionToLiveMemory(resolvedSimplifiedTransactionHistory[0])
+                    logger.debug('New Transaction coming in: %O', resolvedSimplifiedTransactionHistory);
                 } else {
                     this.transactionsMemory.push(...resolvedSimplifiedTransactionHistory)
                 }
@@ -177,6 +188,8 @@ module.exports = class Master {
             logger.info(`Listening to incoming transactions for: ${this.pool.poolContract}`)
 
         } catch (err) {
+            this.disablePolling()
+            this.candlestickBuilder.changeIsAllowedToBuildCandlesticks(false)
             logger.error(err)
         }
     } // End of initiatePolling
@@ -196,6 +209,8 @@ module.exports = class Master {
             })
             Helpers.insertTransactions(modeledTransactions)
         } catch (err) {
+            this.disablePolling()
+            this.candlestickBuilder.changeIsAllowedToBuildCandlesticks(false)
             logger.error(err)
         }
     } // End of modelAndInsertTransactions
@@ -257,21 +272,29 @@ module.exports = class Master {
                 const { blockNumber } = transaction
 
                 if (resolvedPromise.status == "fulfilled") {
-                    delete transaction['block']
-                    transaction.timestamp = resolvedPromise.value.timestamp
-                    results.push(transaction)
-                } else {
-                    // An error occured, do a manual fetch later instead.
-                    logger.warn('An error occured with resolving blocks, retrying manually:  %O', resolvedPromise)
-                    const timestamp = await Helpers.getTimestampForSpecificBlock({ blockNumber: blockNumber })
-                    if (timestamp) {
+                    try {
                         delete transaction['block']
-                        transaction.timestamp = timestamp
+                        transaction.timestamp = resolvedPromise.value.timestamp
                         results.push(transaction)
+                    } catch (err) {
+                        logger.warn('An error occured while handling timestamp in a fulfilled promise, skipping this transaction: %O', err);
+                        logger.warn('transaction details: %O', transaction)
+                        logger.warn('promise details: %O', resolvedPromise)
                     }
 
-                    // if it still doesn't resolve then fuck it, log the tx but move on.
-                    logger.warn('Unable to fetch timestamp for transaction:  %O', transaction)
+                } else {
+                    // An error occured, do a manual fetch later instead.
+                    logger.warn('An error occured with resolving blocks, retrying manually:  %O', resolvedPromise.reason)
+                    const timestamp = await Helpers.getTimestampForSpecificBlock({ blockNumber: blockNumber })
+                    if (!timestamp) {
+                        // if it still doesn't resolve then fuck it, log the tx but move on. // TODO: fix this
+                        logger.warn('Unable to fetch timestamp for transaction:  %O', transaction)
+                    }
+
+                    delete transaction['block']
+                    transaction.timestamp = timestamp
+                    results.push(transaction)
+                    logger.warn('Secondary attempt succesfull.')
                 }
             }
             return results

@@ -1,6 +1,7 @@
 const CandlestickModel = require('../models/candlestick.model')
+const LiveCandlestickModel = require('../models/liveCandlestick.model')
 const logger = require("../config/logger")
-const { allowCandlestickInsertion } = require("../config/config")
+const { allowCandlestickInsertion, modifyLiveCandles } = require("../config/config")
 
 // Returns the last *closed* candle
 const getLastSavedCandlestick = async ({
@@ -46,7 +47,7 @@ const getLastSavedCandlestickBlockNumber = async ({
 }; // End of getLastSavedCandlestickBlockNumber
 
 // Insert an array of candlesticks to database. Array can be empty.
-function insertCandlesticks(candlesticks) {
+const insertCandlesticks = (candlesticks) => {
     try {
         if (!allowCandlestickInsertion) return logger.debug("Insertion of candles disabled")
         return CandlestickModel.insertMany(candlesticks, (err, result) => {
@@ -58,8 +59,60 @@ function insertCandlesticks(candlesticks) {
     }
 }; // End of insertCandlesticks
 
+const modifyLiveCandlestick = (
+    query,
+    fields,
+) => {
+    try {
+        if (!query || !fields) throw new Error("Params are missing")
+        if (!modifyLiveCandles) return logger.debug("Modification of LIVE candlesticks disabled")
+
+        return LiveCandlestickModel.findOneAndUpdate(query, { $set: fields }, {
+            upsert: true
+        }, (err, result) => {
+            if (err) throw err
+            return result
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of modifyLiveCandlestick
+
+// Special modification for the liveCandlestick
+const modifyLiveCandlestickOnTransaction = (
+    query,
+    fields
+) => {
+    try {
+        if (!query || !fields) throw new Error("Params are missing")
+        if (!modifyLiveCandles) return logger.debug("Modification of LIVE candlesticks disabled")
+
+        const { h, l, c, v } = fields
+        if (typeof h != "number" || typeof h != "number" || typeof c != "number" || typeof v != "number") {
+            throw new Error("Fields are not numbers or are missing")
+        }
+
+        return LiveCandlestickModel.findOneAndUpdate(query, {
+            $max: { h: h },
+            $min: { l: l },
+            $inc: { v: v },
+            $set: { c: c },
+        }, {
+            upsert: false
+        }, (err, result) => {
+            if (err) throw err
+            console.log(result);
+            return result
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of modifyLiveCandlestickOnTransaction
+
 module.exports = {
     getLastSavedCandlestick,
     getLastSavedCandlestickBlockNumber,
-    insertCandlesticks
+    modifyLiveCandlestick,
+    modifyLiveCandlestickOnTransaction,
+    insertCandlesticks,
 };

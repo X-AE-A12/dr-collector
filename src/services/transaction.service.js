@@ -55,19 +55,45 @@ const getSavedTransactionsInBlock = async ({
     }
 }; // End of getLastSavedTransactionBlockNumber
 
-const getAllSavedTransactions = async ({
+const getSavedTransactionsFromBlock = async ({
     poolContract = null,
+    fromBlock = null,
 } = {}) => {
     try {
-        if (!poolContract) throw new Error("Params are missing")
+        if (!poolContract || !fromBlock) throw new Error("Params are missing")
         const query = {
             poolContract: poolContract,
+            blockNumber: { $gte: fromBlock }
         }
-        return await TransactionModel.find(query)
+
+        return await TransactionModel.aggregate([
+            { $match: query },
+            { $sort: { blockNumber: 1 } }
+        ])
     } catch (err) {
         throw err
     }
-}; // End of getLastSavedTransactionBlockNumber
+}; // End of getSavedTransactionsFromBlock
+
+const getSavedTransactionsFromTimestamp = async ({
+    poolContract = null,
+    timestamp = null,
+} = {}) => {
+    try {
+        if (!poolContract || !timestamp) throw new Error("Params are missing")
+        const query = {
+            poolContract: poolContract,
+            timestamp: { $gte: timestamp }
+        }
+
+        return await TransactionModel.aggregate([
+            { $match: query },
+            { $sort: { timestamp: 1 } }
+        ])
+    } catch (err) {
+        throw err
+    }
+}; // End of getSavedTransactionsFromTimestamp
 
 const insertTransactions = (transactions) => {
     try {
@@ -85,6 +111,7 @@ module.exports = {
     getLastSavedTransaction,
     getLastSavedTransactionBlockNumber,
     getSavedTransactionsInBlock,
-    getAllSavedTransactions,
+    getSavedTransactionsFromBlock,
+    getSavedTransactionsFromTimestamp,
     insertTransactions,
 };

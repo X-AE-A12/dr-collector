@@ -24,9 +24,17 @@ const getSavedTransactionsInBlock = async (args) => {
     }
 };
 
-const getAllSavedTransactions = async (args) => {
+const getSavedTransactionsFromBlock = async (args) => {
     try {
-        return await transactionService.getAllSavedTransactions(args)
+        return await transactionService.getSavedTransactionsFromBlock(args)
+    } catch (err) {
+        throw err
+    }
+};
+
+const getSavedTransactionsFromTimestamp = async (args) => {
+    try {
+        return await transactionService.getSavedTransactionsFromTimestamp(args)
     } catch (err) {
         throw err
     }
@@ -44,6 +52,7 @@ module.exports = {
     getLastSavedTransaction,
     getLastSavedTransactionBlockNumber,
     getSavedTransactionsInBlock,
-    getAllSavedTransactions,
+    getSavedTransactionsFromBlock,
+    getSavedTransactionsFromTimestamp,
     insertTransactions
 }

@@ -1,7 +1,8 @@
+const  logger = require('../config/logger')
 const { candlestickController, transactionController, providerController } = require('../controllers')
 const { supportedIntervals } = require('../config/config')
 const { containsNull } = require('../utils')
-const intervals = supportedIntervals.map(o => o.internal)
+const intervals = supportedIntervals.map(o => o.interval)
 
 async function getFromBlocksPerInterval({
     poolContract = null,
@@ -23,6 +24,21 @@ async function getFromBlocksPerInterval({
         throw err
     }
 } // End of getFromBlocksPerInterval
+
+async function getLastSavedCandlestick({
+    poolContract = null,
+    interval = null
+} = {}) {
+    try {
+        if (!poolContract) throw new Error("Params are missing")
+        return await candlestickController.getLastSavedCandlestick({
+            poolContract: poolContract,
+            interval: interval,
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of getLastSavedCandlestick
 
 async function getLastSavedCandlesticksPerInterval({
     poolContract = null,
@@ -87,6 +103,36 @@ async function getSavedTransactionsInBlock({
     }
 } // End of getLastSavedTransactionBlockNumber
 
+async function getSavedTransactionsFromBlock({
+    poolContract = null,
+    fromBlock = null,
+} = {}) {
+    try {
+        if (!poolContract || !fromBlock) throw new Error("Params are missing")
+        return transactionController.getSavedTransactionsFromBlock({
+            poolContract: poolContract,
+            fromBlock: fromBlock,
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of getSavedTransactionsFromBlock
+
+async function getSavedTransactionsFromTimestamp({
+    poolContract = null,
+    timestamp = null,
+} = {}) {
+    try {
+        if (!poolContract || !timestamp) throw new Error("Params are missing")
+        return transactionController.getSavedTransactionsFromTimestamp({
+            poolContract: poolContract,
+            timestamp: timestamp,
+        })
+    } catch (err) {
+        throw err
+    }
+} // End of getSavedTransactionsFromTimestamp
+
 async function getLatestBlockNumber() {
     try {
         return providerController.getLatestBlockNumber()
@@ -130,6 +176,20 @@ function getContractListener({
     }
 } // End of getContractListener
 
+async function getTimestampForSpecificBlock({
+    blockNumber = null,
+} = {}) {
+    try {
+        if (!blockNumber) throw new Error("Params are missing")
+        const block = await providerController.getSpecificBlock({
+            blockNumber: blockNumber,
+        })
+        return block.timestamp
+    } catch (err) {
+        throw err
+    }
+} // End of getContractListener
+
 async function chooseFromBlock ({
     interval = null,
     poolContract = null,
@@ -161,13 +221,17 @@ function insertTransactions(modeledTransactions) {
 
 module.exports = {
     getFromBlocksPerInterval,
+    getLastSavedCandlestick,
     getLastSavedCandlesticksPerInterval,
     getLastSavedTransaction,
     getLastSavedTransactionBlockNumber,
     getSavedTransactionsInBlock,
+    getSavedTransactionsFromBlock,
+    getSavedTransactionsFromTimestamp,
     getLatestBlockNumber,
     getTransactionHistoryForContract,
     getContractListener,
+    getTimestampForSpecificBlock,
     chooseFromBlock,
     insertTransactions,
 }

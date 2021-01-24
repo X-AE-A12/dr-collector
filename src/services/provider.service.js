@@ -6,20 +6,6 @@ const logger = require("../config/logger")
 const url = config.QUIKNODE_API_KEY
 const Provider = new ethers.providers.JsonRpcProvider(url);
 
-// https://docs.ethers.io/v5/api/contract/contract/#Contract--creating
-const getContractListener = ({
-    poolContract = null,
-    poolABI = null
-} = {}) => {
-    try {
-        if (!poolContract || !poolABI) throw new Error("Params are missing")
-        return new ethers.Contract(poolContract, poolABI, Provider)
-    } catch (err) {
-        logger.error("Unable to fetch the contractListener")
-        throw err
-    }
-}; // End of getContractListener
-
 const getTransactionHistoryForContract = async ({
     poolContract = null,
     poolABI = null,
@@ -31,8 +17,9 @@ const getTransactionHistoryForContract = async ({
         if (!poolContract || !poolABI || !eventName || !fromBlock || !toBlock) throw new Error("Params missing");
         if (typeof fromBlock != "number" || typeof toBlock != "number") throw new Error("fromBlock or toBlock should be numbers");
         if (fromBlock >= toBlock) return []
+        await Provider.ready
 
-        const listener = _getContractListener({
+        const listener = getContractListener({
             poolContract: poolContract,
             poolABI: poolABI,
         })
@@ -69,7 +56,8 @@ const getTransactionHistoryForContract = async ({
     }
 }; // End of getTransactionHistoryForContract
 
-const _getContractListener = ({
+// https://docs.ethers.io/v5/api/contract/contract/#Contract--creating
+const getContractListener = ({
     poolContract = null,
     poolABI = null
 }) => {
@@ -80,21 +68,34 @@ const _getContractListener = ({
         logger.error("Unable to fetch the contract listener")
         throw err
     }
-} // End of _getContractListener
+} // End of getContractListener
 
 const getLatestBlockNumber = async () => {
     try {
         await Provider.ready
-        const result = await Provider.getBlockNumber()
-        return result
+        return await Provider.getBlockNumber()
     } catch (err) {
         logger.error("Unable to get the latest block number")
         throw err
     }
 } // End of getLatestBlockNumber
 
+const getSpecificBlock = async ({
+    blockNumber = null
+}) => {
+    try {
+        if (!blockNumber) throw new Error("Params are missing")
+        await Provider.ready
+        return await Provider.getBlock(blockNumber)
+    } catch (err) {
+        logger.error("Unable to get a block")
+        throw err
+    }
+} // End of getSpecificBlock
+
 module.exports = {
     getContractListener,
     getTransactionHistoryForContract,
     getLatestBlockNumber,
+    getSpecificBlock,
 }

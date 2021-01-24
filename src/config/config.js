@@ -29,6 +29,7 @@ const self = module.exports = {
           useCreateIndex: true,
           useNewUrlParser: true,
           useUnifiedTopology: true,
+          useFindAndModify: false
         },
     },
 
@@ -38,10 +39,10 @@ const self = module.exports = {
 
     // dev config
     pollingEnabled:             true,
-    allowCandlestickInsertion:  false,
-    allowCandlestickDeletion:   false,
     allowTransactionInsertion:  true,
-    modifyLiveCandles:          false,
+    allowCandlestickInsertion:  true,
+    allowCandlestickDeletion:   false,
+    modifyLiveCandles:          true,
 
     // workers
     enableWorkers:       false,
@@ -65,8 +66,6 @@ const self = module.exports = {
         },
     ],
 
-    supportedIntervals: (envVars.NODE_ENV == "development")
-        ? [{ internal: "1m", intervalInSeconds: 60 }]
-        : intervals.map(o => { return {internal: o.internal, intervalInSeconds: o.intervalInSeconds} }),
+    supportedIntervals: intervals
 
 };

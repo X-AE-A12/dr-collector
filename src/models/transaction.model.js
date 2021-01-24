@@ -7,7 +7,7 @@ const transactionSchema = mongoose.Schema({
     timestamp:      {type: Number, required: true},
     blockNumber:    {type: Number, required: true},
     poolContract:   {type: String, required: true},
-    volume:         {type: Number, required: true},
+    volume:         {type: Number, required: true}, // // TODO: add base volume and quote volume
     price:          {type: Number, required: true},
     logIndex:       {type: Number, required: true},
 }, { timestamps: true })

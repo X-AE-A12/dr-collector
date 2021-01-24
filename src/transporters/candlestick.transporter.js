@@ -15,13 +15,13 @@ module.exports = class Candlestick {
     ){
 
         if (![ "1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d"].includes(interval)) {
-            throw "Invalid candlestick interval: " + interval + " - " + JSON.stringify(Object.values(arguments))
+            throw new Error("Invalid candlestick interval: " + interval + " - " + JSON.stringify(Object.values(arguments)))
         }
 
         // Simple time validation
         time = parseInt(time)
         if (time <= 631148400) {
-            throw "Invalid candlestick time given: " + time + " - " + JSON.stringify(Object.values(arguments))
+            throw new Error("Invalid candlestick time given: " + time + " - " + JSON.stringify(Object.values(arguments)))
         }
 
         this.protocol = protocol

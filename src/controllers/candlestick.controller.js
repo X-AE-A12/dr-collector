@@ -24,8 +24,26 @@ const insertCandlesticks = async (args) => {
     }
 };
 
+const modifyLiveCandlestick = async (query, fields) => {
+    try {
+        return await candlestickService.modifyLiveCandlestick(query, fields)
+    } catch (err) {
+        throw err
+    }
+};
+
+const modifyLiveCandlestickOnTransaction = async (query, fields) => {
+    try {
+        return await candlestickService.modifyLiveCandlestickOnTransaction(query, fields)
+    } catch (err) {
+        throw err
+    }
+};
+
 module.exports = {
     getLastSavedCandlestick,
     getLastSavedCandlestickBlockNumber,
-    insertCandlesticks
+    insertCandlesticks,
+    modifyLiveCandlestick,
+    modifyLiveCandlestickOnTransaction,
 }
