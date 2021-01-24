@@ -120,13 +120,13 @@ async function getSavedTransactionsFromBlock({
 
 async function getSavedTransactionsFromTimestamp({
     poolContract = null,
-    timestamp = null,
+    fromTimestamp = null,
 } = {}) {
     try {
-        if (!poolContract || !timestamp) throw new Error("Params are missing")
+        if (!poolContract || !fromTimestamp) throw new Error("Params are missing")
         return transactionController.getSavedTransactionsFromTimestamp({
             poolContract: poolContract,
-            timestamp: timestamp,
+            timestamp: fromTimestamp,
         })
     } catch (err) {
         throw err
