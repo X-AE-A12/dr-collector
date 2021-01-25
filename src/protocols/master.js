@@ -72,7 +72,7 @@ module.exports = class Master {
             // If the candle doesn't exist yet, then the hardcoded contract.fromBlock will be returned.
             // Also store the last recorded candlesticks from the database.
             const [ fromBlocks, lastSavedTransactionBlockNumber ] = await Promise.all([
-                  Helpers.getFromBlocksPerInterval({ poolContract: this.pool.poolContract, fromBlock: this.pool.fromBlock })
+                  Helpers.getFromBlocksPerInterval({ poolContract: this.pool.poolContract, fromBlock: this.pool.fromBlock }) // TODO: use liveCandlesticks so the $sort pipeline doesn't need to be triggered.
                 , Helpers.getLastSavedTransactionBlockNumber({ poolContract: this.pool.poolContract })
             ])
 

@@ -192,7 +192,7 @@ module.exports = class CandlestickBuilder{
                 lastSavedCandlestick: lastSavedCandlestick // can be a null, it's a feature
             })
 
-            const batchedTransactions = batchTransactionsPerDuration(transactions, openTimes, intervalInSeconds)
+            const batchedTransactions = batchTransactionsPerDuration(transactions, openTimes, intervalInSeconds) // TODO: make this less memory extensive
             // the batchedTransactions into smaller batches
             // e.g. when doing a full boot it might mean that we have to handle 100's of thousands of candlesticks (that eat memory)
             const chunkedBatchedTransactions = _.chunk(Object.keys(batchedTransactions), 1000) // [ timestamp, timestamp, timestamp ]
@@ -220,7 +220,7 @@ module.exports = class CandlestickBuilder{
 
                 // Insert to database
                 this.modelAndInsertCandlesticks(builtCandlesticks, interval)
-                logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
+                // logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
             }
 
             return (chunkedBatchedTransactions.length)
