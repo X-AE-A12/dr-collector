@@ -12,6 +12,7 @@ module.exports = class Master {
         this.pool = pool
         this.contractListener = undefined
         this.candlestickBuilder = undefined
+        this.destroyIntervals = false
         this.isDoneSyncing = false
         this.transactionsMemory = []
         this.transactionsInLastBlock = []
@@ -23,6 +24,10 @@ module.exports = class Master {
     // this.transactionsMemory).
     awaitDoneSyncing() {
         const self = setInterval(async () => {
+            if (this.destroyIntervals) {
+                return clearInterval(self)
+            }
+
             if (this.isDoneSyncing) {
                 clearInterval(self)
 
@@ -84,6 +89,15 @@ module.exports = class Master {
             const latestBlockNumber = await Helpers.getLatestBlockNumber()
             logger.debug(`Processing ${latestBlockNumber - oldestBlock} blocks`)
 
+            if (latestBlockNumber < oldestBlock) {
+                logger.warn("Provider sync is skewed (latestBlockNumber is lower than our last recorded candlestick blockNumber), Quiknode doesn this sometimes. For now exiting. (you need to fix this btw)")
+                this.disablePolling()
+                this.candlestickBuilder.changeIsAllowedToBuildCandlesticks(false)
+                this.destroyIntervals = true
+                this.isDoneSyncing = false
+                return
+            }
+
             const batchSizing = 100 // limited due to Memory Usage // TODO: optimize this and see how we can make this less memory extensive
             let from = oldestBlock + 1
             let to = from + batchSizing
@@ -134,6 +148,7 @@ module.exports = class Master {
         } catch (err) {
             this.disablePolling()
             this.candlestickBuilder.changeIsAllowedToBuildCandlesticks(false)
+            this.destroyIntervals = true
             this.isDoneSyncing = false
             logger.error(err)
         }

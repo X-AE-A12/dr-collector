@@ -15,7 +15,7 @@ const getLastSavedCandlestick = async ({
             i: interval
         }
          // TODO: this can be extremely fucked (RAM usage) if we have a gazillion documents
-         // need to FIX THIS ASAP 
+         // need to FIX THIS ASAP
         const result = await CandlestickModel.aggregate([
             { $match: query },
             { $sort: { t: -1} },

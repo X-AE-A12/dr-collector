@@ -21,6 +21,8 @@ function initiate() {
         if (!PoolManager) return
         PoolManager = new PoolManager(pool)
         PoolManager.synchronize()
+
+        // TODO: make this completely sync (in order to reduce RAM load)
     });
 }
 

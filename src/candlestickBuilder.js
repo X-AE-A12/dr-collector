@@ -191,29 +191,38 @@ module.exports = class CandlestickBuilder{
                 firstTransaction: (transactions.length) ? transactions[0] : null, // can be a null, it's a feature
                 lastSavedCandlestick: lastSavedCandlestick // can be a null, it's a feature
             })
+
             const batchedTransactions = batchTransactionsPerDuration(transactions, openTimes, intervalInSeconds)
+            // the batchedTransactions into smaller batches
+            // e.g. when doing a full boot it might mean that we have to handle 100's of thousands of candlesticks (that eat memory)
+            const chunkedBatchedTransactions = _.chunk(Object.keys(batchedTransactions), 1000) // [ timestamp, timestamp, timestamp ]
 
             // Process all closed candles & ignore the currently open candle (the last key in batchedTransactions)
             const builtCandlesticks = []
             const unclosedCandlestickKey = Object.keys(batchedTransactions).pop()
             let previousCandlestick = lastSavedCandlestick
 
-            for (const key in batchedTransactions) {
-                if (key == unclosedCandlestickKey) break // ignore the unclosed candle
-                const transactionsInThisCandlestick = batchedTransactions[key]
-                if (!previousCandlestick && !transactionsInThisCandlestick.length) break
-                const candlestick = buildCandlestick({
-                    openTime: Number(key),
-                    transactionsInThisCandlestick: transactionsInThisCandlestick,
-                    previousCandlestick: previousCandlestick
+            // this function needs to be worked entirely in sync (async fucks up the previousCandlestick <> lastSavedCandlestick var, as well as the return value)
+            for (let i = 0; i < chunkedBatchedTransactions.length; i++) {
+                const chunk = chunkedBatchedTransactions[i] // array of keys
+                chunk.forEach((key) => { // TODO: seek performance optimization between for loop and foreach
+                    if (key == unclosedCandlestickKey) return // ignore the unclosed candle
+                    const transactionsInThisCandlestick = batchedTransactions[key]
+                    if (!previousCandlestick && !transactionsInThisCandlestick.length) return
+                    const candlestick = buildCandlestick({
+                        openTime: Number(key),
+                        transactionsInThisCandlestick: transactionsInThisCandlestick,
+                        previousCandlestick: previousCandlestick
+                    })
+                    builtCandlesticks.push(candlestick)
+                    previousCandlestick = candlestick
                 })
-                builtCandlesticks.push(candlestick)
-                previousCandlestick = candlestick
-            }
-            // Insert to database
-            this.modelAndInsertCandlesticks(builtCandlesticks, interval)
-            logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
 
+                // Insert to database
+                this.modelAndInsertCandlesticks(builtCandlesticks, interval)
+            }
+
+            logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
             return builtCandlesticks[builtCandlesticks.length - 1] // can return undefined if there are no candlesticks to work with, this a feature and we rely on it @updateLiveCandlesticks
 
         } catch (err) {
