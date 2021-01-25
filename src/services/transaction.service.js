@@ -49,7 +49,7 @@ const getSavedTransactionsInBlock = async ({
             poolContract: poolContract,
             blockNumber: blockNumber,
         }
-        return await TransactionModel.find(query)
+        return await TransactionModel.find(query).lean()
     } catch (err) {
         throw err
     }

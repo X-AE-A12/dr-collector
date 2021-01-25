@@ -176,7 +176,7 @@ module.exports = class CandlestickBuilder{
         try {
             if (!interval || !intervalInSeconds) throw new Error("Params are missing.")
 
-            const lastSavedCandlestick = await Helpers.getLastSavedCandlestick({ poolContract: this.pool.poolContract, interval: interval })
+            const lastSavedCandlestick = await Helpers.getLastSavedCandlestick({ poolContract: this.pool.poolContract, interval: interval, intervalInSeconds: intervalInSeconds })
 
             // Sometimes the contractListener fucks up and delays some events causing new transactions to not be
             // included in a new candle e.g. it emits them when the candle has already closed. Therefor NOT using

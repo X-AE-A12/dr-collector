@@ -2,7 +2,6 @@ const  logger = require('../config/logger')
 const { candlestickController, transactionController, providerController } = require('../controllers')
 const { supportedIntervals } = require('../config/config')
 const { containsNull } = require('../utils')
-const intervals = supportedIntervals.map(o => o.interval)
 
 async function getFromBlocksPerInterval({
     poolContract = null,
@@ -10,9 +9,10 @@ async function getFromBlocksPerInterval({
 } = {}) {
     try {
         if (!poolContract || !fromBlock) throw new Error("Params are missing")
-        const promises = intervals.map(interval => {
+        const promises = supportedIntervals.map(intervalProps => {
             return chooseFromBlock({
-                interval: interval,
+                interval: intervalProps.interval,
+                intervalInSeconds: intervalProps.intervalInSeconds,
                 poolContract: poolContract,
                 fromBlock: fromBlock
             })
@@ -27,13 +27,15 @@ async function getFromBlocksPerInterval({
 
 async function getLastSavedCandlestick({
     poolContract = null,
-    interval = null
+    interval = null,
+    intervalInSeconds = null
 } = {}) {
     try {
-        if (!poolContract) throw new Error("Params are missing")
+        if (!poolContract || !interval || !intervalInSeconds) throw new Error("Params are missing")
         return await candlestickController.getLastSavedCandlestick({
             poolContract: poolContract,
             interval: interval,
+            intervalInSeconds: intervalInSeconds
         })
     } catch (err) {
         throw err
@@ -45,10 +47,11 @@ async function getLastSavedCandlesticksPerInterval({
 } = {}) {
     try {
         if (!poolContract) throw new Error("Params are missing")
-        const promises = intervals.map(interval => {
+        const promises = supportedIntervals.map(intervalProps => {
             return candlestickController.getLastSavedCandlestick({
                 poolContract: poolContract,
-                interval: interval,
+                interval: intervalProps.interval,
+                intervalInSeconds: intervalProps.intervalInSeconds,
             })
         })
         const candles = await Promise.all(promises);
@@ -192,14 +195,16 @@ async function getTimestampForSpecificBlock({
 
 async function chooseFromBlock ({
     interval = null,
+    intervalInSeconds = null,
     poolContract = null,
     fromBlock = null
 } = {}) {
     try {
-        if (!interval || !poolContract || !fromBlock) throw new Error("Params are missing");
+        if (!interval || !intervalInSeconds || !poolContract || !fromBlock) throw new Error("Params are missing");
         const lastCandlestickBlockNumber = await candlestickController.getLastSavedCandlestickBlockNumber({
             poolContract: poolContract,
             interval: interval,
+            intervalInSeconds: intervalInSeconds
         })
         return (!lastCandlestickBlockNumber)
             ? fromBlock

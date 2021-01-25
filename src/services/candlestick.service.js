@@ -6,16 +6,27 @@ const { allowCandlestickInsertion, modifyLiveCandles } = require("../config/conf
 // Returns the last *closed* candle
 const getLastSavedCandlestick = async ({
     poolContract = null,
-    interval = null
+    interval = null,
+    intervalInSeconds = null,
 } = {}) => {
     try {
-        if (!poolContract || !interval) throw new Error("Params missing")
-        const query = {
+        if (!poolContract || !interval || !intervalInSeconds) throw new Error("Params missing")
+
+        // This can be extremely fucked (RAM usage) if we have a gazillion documents
+        // So try to minimize it by using the liveCandlestick as a conditional benchmark.
+        const liveCandlestick = await LiveCandlestickModel.findOne({
+            poolContract: poolContract,
+            interval: interval
+        }).lean()
+
+        let query = {
             poolContract: poolContract,
             i: interval
         }
-         // TODO: this can be extremely fucked (RAM usage) if we have a gazillion documents
-         // need to FIX THIS ASAP
+        if (liveCandlestick) {
+            query['t'] = { $gte: liveCandlestick.t - intervalInSeconds } // need to fix the t = 0 thingy when doing findOneAndUpdate
+        }
+
         const result = await CandlestickModel.aggregate([
             { $match: query },
             { $sort: { t: -1} },
@@ -33,13 +44,15 @@ const getLastSavedCandlestick = async ({
 // Returns the last *closed* candle its blockNumber
 const getLastSavedCandlestickBlockNumber = async ({
     poolContract = null,
-    interval = null
+    interval = null,
+    intervalInSeconds = null
 } = {}) => {
     try {
-        if (!poolContract || !interval) throw new Error("Params missing")
+        if (!poolContract || !interval || !intervalInSeconds) throw new Error("Params missing")
         const query = {
             poolContract: poolContract,
-            interval: interval
+            interval: interval,
+            intervalInSeconds: intervalInSeconds
         }
         const candle = await getLastSavedCandlestick(query)
         return (candle)
@@ -49,19 +62,6 @@ const getLastSavedCandlestickBlockNumber = async ({
         throw err
     }
 }; // End of getLastSavedCandlestickBlockNumber
-
-// Insert an array of candlesticks to database. Array can be empty.
-const insertCandlesticks = (candlesticks) => {
-    try {
-        if (!allowCandlestickInsertion) return logger.debug("Insertion of candles disabled")
-        return CandlestickModel.insertMany(candlesticks, (err, result) => {
-            if (err) throw err
-            return result
-        })
-    } catch (err) {
-        logger.error(err)
-    }
-}; // End of insertCandlesticks
 
 const modifyLiveCandlestick = (
     query,
@@ -111,6 +111,20 @@ const modifyLiveCandlestickOnTransaction = (
         throw err
     }
 } // End of modifyLiveCandlestickOnTransaction
+
+
+// Insert an array of candlesticks to database. Array can be empty.
+const insertCandlesticks = (candlesticks) => {
+    try {
+        if (!allowCandlestickInsertion) return logger.debug("Insertion of candles disabled")
+        return CandlestickModel.insertMany(candlesticks, (err, result) => {
+            if (err) throw err
+            return result
+        })
+    } catch (err) {
+        logger.error(err)
+    }
+}; // End of insertCandlesticks
 
 module.exports = {
     getLastSavedCandlestick,

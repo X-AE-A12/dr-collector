@@ -23,6 +23,7 @@ function initiate() {
         PoolManager.synchronize()
 
         // TODO: make this completely sync (in order to reduce RAM load)
+        // the trick: wait for resolveTransactionsAllIntervals to finish. 
     });
 }
 
