@@ -198,13 +198,13 @@ module.exports = class CandlestickBuilder{
             const chunkedBatchedTransactions = _.chunk(Object.keys(batchedTransactions), 1000) // [ timestamp, timestamp, timestamp ]
 
             // Process all closed candles & ignore the currently open candle (the last key in batchedTransactions)
-            const builtCandlesticks = []
             const unclosedCandlestickKey = Object.keys(batchedTransactions).pop()
             let previousCandlestick = lastSavedCandlestick
 
             // this function needs to be worked entirely in sync (async fucks up the previousCandlestick <> lastSavedCandlestick var, as well as the return value)
             for (let i = 0; i < chunkedBatchedTransactions.length; i++) {
                 const chunk = chunkedBatchedTransactions[i] // array of keys
+                let builtCandlesticks = []
                 chunk.forEach((key) => { // TODO: seek performance optimization between for loop and foreach
                     if (key == unclosedCandlestickKey) return // ignore the unclosed candle
                     const transactionsInThisCandlestick = batchedTransactions[key]
@@ -220,10 +220,12 @@ module.exports = class CandlestickBuilder{
 
                 // Insert to database
                 this.modelAndInsertCandlesticks(builtCandlesticks, interval)
+                logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
             }
 
-            logger.info(`Succesfully inserted ${builtCandlesticks.length} candlesticks`);
-            return builtCandlesticks[builtCandlesticks.length - 1] // can return undefined if there are no candlesticks to work with, this a feature and we rely on it @updateLiveCandlesticks
+            return (chunkedBatchedTransactions.length)
+                ? previousCandlestick
+                : undefined // return undefined if there are no candlesticks to work with, this a feature and we rely on it @updateLiveCandlesticks
 
         } catch (err) {
             this.isAllowedToBuildCandlesticks = false
