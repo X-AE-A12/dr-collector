@@ -57,7 +57,7 @@ module.exports = class CandlestickBuilder{
             for (let i = 0; i < supportedIntervals.length; i++) {
                 const query = { poolContract: this.getPoolContract(), interval: supportedIntervals[i].interval }
                 const fields = {
-                    t: 0,
+                    t: 0, // this needs fixing
                     o: 0,
                     h: 0,
                     l: 0,
@@ -299,7 +299,7 @@ function buildCandlestick({
             low         = previousCandlestick.c
             close       = previousCandlestick.c
             volume      = 0
-        } else {
+        } else if (!previousCandlestick){
             blockNumber = transactionsInThisCandlestick[transactionsInThisCandlestick.length - 1].blockNumber
             time        = openTime
             open        = transactionsInThisCandlestick[0].price
@@ -307,7 +307,16 @@ function buildCandlestick({
             low         = (_.minBy(transactionsInThisCandlestick, (tx) => tx.price)).price
             close       = transactionsInThisCandlestick[transactionsInThisCandlestick.length - 1].price
             volume      = _.sumBy(transactionsInThisCandlestick, (tx) => tx.volume)
+        } else {
+            blockNumber = transactionsInThisCandlestick[transactionsInThisCandlestick.length - 1].blockNumber
+            time        = openTime
+            open        = previousCandlestick.c
+            high        = (_.maxBy(transactionsInThisCandlestick, (tx) => tx.price)).price
+            low         = (_.minBy(transactionsInThisCandlestick, (tx) => tx.price)).price
+            close       = transactionsInThisCandlestick[transactionsInThisCandlestick.length - 1].price
+            volume      = _.sumBy(transactionsInThisCandlestick, (tx) => tx.volume)
         }
+
         return {
             b: blockNumber,
             t: time,
