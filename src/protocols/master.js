@@ -95,6 +95,7 @@ module.exports = class Master {
                 this.candlestickBuilder.changeIsAllowedToBuildCandlesticks(false)
                 this.destroyIntervals = true
                 this.isDoneSyncing = false
+                proces.exit(1)
                 return
             }
 
