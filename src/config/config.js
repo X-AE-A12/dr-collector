@@ -45,19 +45,19 @@ const self = module.exports = {
     modifyLiveCandles:          true,
 
     // workers
-    enableWorkers:       false,
-    updateInfo:          false,
+    enableWorkers:       true,
+    updateInfo:          true,
 
     // even if there are NO pools we can still return these values
     // this config has no internal use, its only used for the external API.
     // internal use is simply by resolving files in the ~src/protocols dir
     supportedProtocols: [
-        {
-          value: 'balancer',
-          name: 'balancer',
-          desc: 'balancer',
-          type: "BalancerPoolTokens",
-        },
+        // {
+        //   value: 'balancer',
+        //   name: 'balancer',
+        //   desc: 'balancer',
+        //   type: "BalancerPoolTokens",
+        // },
         {
           value: 'uniswap',
           name: 'uniswap',
