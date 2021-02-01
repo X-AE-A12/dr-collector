@@ -14,7 +14,7 @@ module.exports = class Candlestick {
         quoteVolume
     ){
 
-        if (![ "1m", "5m", "15m", "30m", "1h", "4h", "1d", "3d"].includes(interval)) {
+        if (![ "1m", "5m", "15m", "30m", "1h", "4h", "12h", "1d", "3d"].includes(interval)) {
             throw new Error("Invalid candlestick interval: " + interval + " - " + JSON.stringify(Object.values(arguments)))
         }
 
